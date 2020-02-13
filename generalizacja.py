@@ -10,7 +10,7 @@ arcpy.env.overwriteOutput = True
 ##tolerance = raw_input ("Podaj tolerancjê upraszczania budynków [rad]: ")
 ##k = raw_input ("Podaj liczbê wierzcho³ków odcinanych przez sieczn¹: ")
 
-tolerance = 0.01
+tolerance = 0.1
 k = 4
 
 def Azimuth (X1,X2,Y1,Y2):
@@ -74,14 +74,20 @@ def CreateSHP(data, file_name):
         cursor.insertRow([build])
     del cursor
 
-def Secant (building):
+def Secant(building):
 
+    array = arcpy.Array([arcpy.Point(*coords) for coords in building])
+    build = arcpy.Geometry("POLYGON", array)                      
+    
     secants = []
     k=2
     for pnt in building[2:-2]:
         d = Distance(building[0][0],pnt[0],building[0][1],pnt[1])
-        slow = {'id':(str(0)+str(k)), 'lenght':d, 'vert_num':0}
-        secants.append(slow)
+        num = k+1
+        diction = {'id':(str(0)+str(k)), 'lenght':d, 'vert_num':num, 'id_from':0, 'id_to':k}
+        geom = arcpy.Geometry("POLYLINE", arcpy.Array([arcpy.Point(building[0][0],building[0][1]), arcpy.Point(pnt[0],pnt[1])]))
+        if not geom.crosses(build):
+            secants.append(diction)
         k+=1
 
     i=1
@@ -89,18 +95,58 @@ def Secant (building):
         j=i+2
         for oth in building[i+2:-1]:
             d = Distance(pnt[0],oth[0],pnt[1],oth[1])
-            slow = {'id':str(i)+str(j), 'lenght':d, 'vert_num':0}
-            secants.append(slow)
+            num = j-i+1
+            diction = {'id':str(i)+str(j), 'lenght':d, 'vert_num':num, 'id_from':i, 'id_to':j}
+            geom = arcpy.Geometry("POLYLINE", arcpy.Array([arcpy.Point(pnt[0],pnt[1]), arcpy.Point(oth[0],oth[1])]))
+            if not geom.crosses(build):
+                secants.append(diction)
             j+=1
         i+=1
 
-    print secants
+    secants = sorted(secants, key=lambda k: k['lenght'])
+    return secants
+
+def Generalization(secants,building):
+
+    count = len(building)
+    dict_xy = {i:building[i] for i in range (len(building))}
+    xy_rej = []
+    rej_draw = []
+    xy_check = {}
     
+
+    for sec in secants:
+        print sec['vert_num']
+        if sec['vert_num'] >= k:  
+            if sec['id_from'] not in xy_rej and sec['id_to'] not in xy_rej:
+                i=0
+                for vert in range(sec['id_from'], sec['id_to']+1):
+                    if building[vert] not in xy_rej:
+                        if not i == 0 and not i == sec['id_to']+1-sec['id_from']:
+                            xy_check[vert] = building[vert]
+                        xy_rej.append(building[vert])
+                        i+=1
+                count -= (sec['vert_num']-2)
+                if count <= 5: break
+                print count
+                rej_draw.append(xy_rej)
+
+    
+##    draw = []
+##    draw.append(xy_rej)
+    
+    CreateSHP(rej_draw, "rej")
+    print rej_draw
+    print"***"
+    print xy_check
+    return xy_rej
+ 
 
 def main ():
     data = DataImport()
     s_b = Simplify(data)
     #CreateSHP(s_b, "nowe")
-    Secant(s_b[4])
+    sec = Secant(s_b[3])
+    Generalization(sec,s_b[3])
     
 main()
