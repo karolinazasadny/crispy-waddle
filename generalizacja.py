@@ -7,11 +7,11 @@ global k
 
 arcpy.env.overwriteOutput = True
 
-##tolerance = raw_input ("Podaj tolerancjê upraszczania budynków [rad]: ")
-##k = raw_input ("Podaj liczbê wierzcho³ków odcinanych przez sieczn¹: ")
+tolerance = float(raw_input ("Podaj tolerancjê upraszczania budynków [rad]: "))
+k = int(raw_input ("Podaj liczbê wierzcho³ków odcinanych przez sieczn¹: "))
 
-tolerance = 0.1
-k = 4
+##tolerance = 0.1
+##k = 3
 
 def Azimuth (X1,X2,Y1,Y2):
 
@@ -113,40 +113,43 @@ def Generalization(secants,building):
     xy_rej = []
     rej_draw = []
     xy_check = {}
-    
+    remain = []
 
     for sec in secants:
-        print sec['vert_num']
-        if sec['vert_num'] >= k:  
-            if sec['id_from'] not in xy_rej and sec['id_to'] not in xy_rej:
-                i=0
-                for vert in range(sec['id_from'], sec['id_to']+1):
-                    if building[vert] not in xy_rej:
-                        if not i == 0 and not i == sec['id_to']+1-sec['id_from']:
-                            xy_check[vert] = building[vert]
-                        xy_rej.append(building[vert])
-                        i+=1
-                count -= (sec['vert_num']-2)
-                if count <= 5: break
-                print count
-                rej_draw.append(xy_rej)
+        if sec['vert_num'] >= k and sec['id_from'] not in xy_check.keys() and sec['id_to'] not in xy_check.keys():
+            i=0
+            count = len(building) - len(xy_check)
+            if count <= 5: break
+            xy_rej = []
+            for vert in range(sec['id_from'], sec['id_to']+1):
+                if building[vert] not in xy_check.keys():
+                    if not i== 0 and not i == sec['id_to']-sec['id_from']:
+                        xy_check[vert] = building[vert]
+                    xy_rej.append(building[vert])
+                    i+=1
+            rej_draw.append(xy_rej)
 
     
-##    draw = []
-##    draw.append(xy_rej)
-    
-    CreateSHP(rej_draw, "rej")
-    print rej_draw
-    print"***"
-    print xy_check
-    return xy_rej
+    for pnt in dict_xy:
+        if pnt not in xy_check: remain.append(dict_xy[pnt])
+
+    return (rej_draw, [remain])
  
 
 def main ():
     data = DataImport()
-    s_b = Simplify(data)
-    #CreateSHP(s_b, "nowe")
-    sec = Secant(s_b[3])
-    Generalization(sec,s_b[3])
+    simpl_data = Simplify(data)
+    result = [Generalization(Secant(i),i) for i in simpl_data]
+
+    rejected = []
+    remained = []
+
+    for build in result:
+        rejected += build[0]
+        remained += build[1]
+
+    CreateSHP(rejected, "rejected")
+    CreateSHP(remained, "remained")
     
-main()
+if __name__ == '__main__':
+    main()
